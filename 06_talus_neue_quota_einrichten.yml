@@ -1,0 +1,87 @@
+#!/usr/bin/env ansible-playbook
+
+#******************************************************************************
+# Applikation:          Storage-Admin
+# ScriptName:           06_talus_neue_quota_einrichten.yml
+# Version:              1.0
+# Typ:                  ansible YAML playbook
+# Beschreibung:         YAML Playbook Template to start new OnTap Module
+#                       based ansible-playbooks
+# Author:               Horst Pauli Proffessional Services Consultant
+#
+# Target Systems:       LINUX Server/VM used as Ansible Host at Customer Site
+#
+# (C) Copyright         NetApp Switzerland 2020
+#******************************************************************************
+# Modifications:        11/05/2021      Initial Version         # H. Pauli  ***
+#                       xx/xx/xxxx      comment                 # Author    ***
+#******************************************************************************
+
+- hosts: localhost
+  gather_facts: false
+  vars:
+    hostname:       {{ hostname }}"
+    username:       "{{ PRI_CLU_USER }}"
+    password:       "{{ PRI_CLU_PASS }}"
+    volumename:     {{ volumename }}"
+    quotauser:      'svm_ta_cifs\pauli2'
+    userquotasize:  7
+    https:          true
+    validate_certs: false
+  vars_files:
+    - global.vars
+  collections:
+    - netapp.ontap
+    - community.general
+
+  tasks:
+  - name: Automaticaly choose the right Vservername
+    set_fact:
+      vservername:           "{% if hostname=='tacluster01' %}svm_ta_cifs{% elif hostname=='tbcluster01'%}svm_tb_cifs{% else %}svm_cifs01{% endif %}"
+
+  - name: Gather quota details from {{ hostname }} for Volume {{ volumename }} and user {{ quotauser }}
+    na_ontap_command:
+      hostname:       "{{ hostname }}"
+      username:       "{{ PRI_CLU_USER }}"
+      password:       "{{ PRI_CLU_PASS }}"
+      command:        "quota report -vserver {{ vservername }} -volume {{ volumename }} -quota-target {{ quotauser }}"
+      privilege:      'admin'
+      return_dict:    true
+    register:         info_hostname
+
+  - debug:           msg="{{ info_hostname.msg.result_value }}"
+
+  - name: Automaticaly check if quota needs to resize or off/on
+    set_fact:
+      quotarun:           "{% if info_hostname.msg.result_value>=1 %}resize{% else %}reinitialize{% endif %}"
+
+  - name: Add/Set quota with option {{ quotarun }}
+    na_ontap_quotas:
+      state: present
+      vserver:                  "{{ vservername }}"
+      volume:                   "{{ volumename }}"
+      quota_target:             "{{ quotauser }}"
+      type:                     user
+      policy:                   default
+      disk_limit:               "{{ userquotasize }} GB"
+      set_quota_status:         True
+      activate_quota_on_change: "{{ quotarun }}"
+      hostname:                 "{{ hostname }}"
+      username:                 "{{ PRI_CLU_USER }}"
+      password:                 "{{ PRI_CLU_PASS }}"
+
+  - name: set Voluume quota off when new User Quota added
+    na_ontap_command:
+      command:                  "vol quota off -vserver {{ vservername }} -volume {{ volumename }}"
+      hostname:                 "{{ hostname }}"
+      username:                 "{{ PRI_CLU_USER }}"
+      password:                 "{{ PRI_CLU_PASS }}"
+    when: quotarun == "reinitialize"
+
+  - name: set Voluume quota on again when new User Quota added
+    na_ontap_command:
+      command:                  "vol quota on -vserver {{ vservername }} -volume {{ volumename }}"
+      hostname:                 "{{ hostname }}"
+      username:                 "{{ PRI_CLU_USER }}"
+      password:                 "{{ PRI_CLU_PASS }}"
+    when: quotarun == "reinitialize"

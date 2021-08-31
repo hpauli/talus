@@ -1,0 +1,67 @@
+#!/usr/bin/env ansible-playbook
+
+#******************************************************************************
+# Applikation:          Storage-Admin
+# ScriptName:           07_Talus_fpolicy_scan_shares.yml
+# Version:              1.0
+# Typ:                  ansible YAML playbook
+# Beschreibung:         This script searces for cifs shares with Scan in the comment fields
+#                       then it will write all of them into a file per vserver
+# Author:               Horst Pauli Proffessional Services Consultant
+#
+# Target Systems:       LINUX Server/VM used as Ansible Host at Customer Site
+#
+# (C) Copyright         NetApp Switzerland 2020
+#******************************************************************************
+# Modifications:        05/05/2021      Initial Version         # H. Pauli  ***
+#                       xx/xx/xxxx      comment                 # Author    ***
+#******************************************************************************
+
+- hosts: localhost
+  gather_facts: false
+  vars:
+      hostname:       "{{ hostname }}"
+      username:       "{{ PRI_CLU_USER }}"
+      password:       "{{ PRI_CLU_PASS }}"
+      vservername:    svm_ta_cifs
+      https:          true
+      validate_certs: false
+  vars_files:
+    - global.vars
+  collections:
+    - netapp.ontap
+
+  tasks:
+  - name: List all SCAN Volume on {{ PRI1_CLU }} Vserver svm_tb_cifs
+    na_ontap_command:
+      command:       "vserver cifs share show -vserver svm_ta_cifs -comment  *Scan* -fields path"
+      return_dict:     true
+      username:        ansible
+      password:        netapp11
+      hostname:        tacluster01
+      privilege:      'admin'
+    register:          svm_ta_cifs_scanshares
+
+  - debug:           msg="{{ svm_ta_cifs_scanshares.msg.stdout }}"
+
+  - name: List all SCAN Volume on {{ PRI2_CLU }} Vserver svm_tb_cifs
+    na_ontap_command:
+      command:       "vserver cifs share show -vserver svm_tb_cifs -comment  *Scan* -fields path"
+      return_dict:    true
+      username:        "{{ PRI_CLU_USER }}"
+      password:        "{{ PRI_CLU_PASS }}"
+      hostname:        "{{ PRI2_CLU }}"
+    register:          svm_tb_cifs_scanshares
+
+  - debug:           msg="{{ svm_tb_cifs_scanshares.msg.stdout }}"
+
+#  - name: Write all Scan Volumes Output to file /tmp/scan_volumepath.txt
+#    copy:
+#      #content:       "{{ svm_ta_cifs_scanshares.msg.stdout.split('\n'),svm_tb_cifs_scanshares.msg.stdout.split('\n') }}"
+#      content:       "{{ svm_ta_cifs_scanshares.msg.stdout | trim ,svm_tb_cifs_scanshares.msg.stdout | trim }}"
+#      dest:          '/tmp/scan_volumepath.txt'
+
+  - name: Execute script on Host twfa01
+    shell: ansible awx-pauli -m script -a "/var/lib/awx/projects/talus/get_scan_shares.sh > /tmp/scan_shares.log"
+    remote_user: root
+

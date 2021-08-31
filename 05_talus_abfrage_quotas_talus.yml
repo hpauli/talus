@@ -1,0 +1,78 @@
+#!/usr/bin/env ansible-playbook
+
+#******************************************************************************
+# Applikation:          Storage-Admin
+# ScriptName:           05_talus_abfrage_quotas.yml
+# Version:              1.0
+# Typ:                  ansible YAML playbook
+# Beschreibung:         RQuotas abfrage und via Mail versenden
+#
+# Author:               Horst Pauli Proffessional Services Consultant
+#
+# Target Systems:       LINUX Server/VM used as Ansible Host at Customer Site
+#
+# (C) Copyright         NetApp Switzerland 2020
+#******************************************************************************
+# Modifications:        01/03/2021      Initial Version         # H. Pauli  ***
+#                       xx/xx/xxxx      comment                 # Author    ***
+#******************************************************************************
+
+- hosts: localhost
+  gather_facts: false
+  vars:
+      hostname:         "{{ PRI_CLU }}"
+      username:         "{{ PRI_CLU_USER }}"
+      password:         "{{ PRI_CLU_PASS }}"
+      https:            true
+      validate_certs:   false
+      info_tacluster01: []
+  vars_files:
+    - global.vars
+  collections:
+    - netapp.ontap
+    - community.general
+
+  tasks:
+#  - name: Gather quota details from {{ PRI1_CLU }}
+#    na_ontap_command:
+#      hostname:       "{{ PRI1_CLU }}"
+#      username:       "{{ PRI1_CLU_USER }}"
+#      password:       "{{ PRI1_CLU_PASS }}"
+#      command:        "quota report -vserver svm_ta_cifs"
+#      privilege:      'admin'
+#      return_dict:    true
+#    register:         info_tacluster01
+
+#  - debug:           msg="{{ info_tacluster01.msg.stdout }}"
+
+#  - name: Write Command Output to file
+#    copy:
+#      content:       '{{ info_tacluster01.stdout }}'
+#      dest:          "/tmp/quota_report.log"
+
+  - name: CLI TEST 1
+    shell: ansible localhost -m na_ontap_command -a 'hostname=tacluster01 username=admin password=netapp11 command="quota report -vserver svm_ta_cifs"'
+    register: cli_tacluster01
+
+  - debug: msg="{{ cli_tacluster01.stdout }}"
+
+  - name: CLI Write Command Output to file
+    copy:
+      content:      '{{ cli_tacluster01.stdout }}'
+      dest:           "/tmp/cli_quota_report.log"
+
+
+
+#################################################################################
+
+  - name: Send E-Mail to Mailserver 10.0.1.90
+    mail:
+      host:             10.0.1.90
+      port:             25
+      to:               netapp@talus.ch
+      from:             netapp@talus.ch
+      subject:          Ansible AWX Quota report
+      body:             "{{ cli_tacluster01.stdout }}"
+#      body:            "{{ info_tacluster01.msg.stdout }},{{ info_tbcluster01.msg.stdout }},{{ info_tzcluster01.msg.stdout }}"
+
+

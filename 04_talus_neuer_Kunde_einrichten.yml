@@ -1,0 +1,158 @@
+#!/usr/bin/env ansible-playbook
+
+###############################################################################
+# Applikation:          Storage-Admin
+# ScriptName:           04_talus_neuer_Kunde_einrichten.yml
+# Version:              1.0
+# Typ:                  ansible YAML playbook
+# Beschreibung:         Erstelle neuen Qtree für neuen Kunden
+#
+# Author:               Horst Pauli Professional Services Consultant
+#
+# Target Systems:       LINUX Server/VM used as Ansible Host at Customer Site
+#
+# (C) Copyright         NetApp Switzerland 2020
+###############################################################################
+# Modifications:        16/03/2021      Initial Version         # H. Pauli  ###
+###############################################################################
+
+- hosts: localhost
+  gather_facts: false
+  vars:
+    hostname:                "{{ hostname }}"
+    username:                "{{ PRI_CLU_USER }}"
+    password:                "{{ PRI_CLU_PASS }}"
+    vserver:                 "{{ vservername }}"
+    https:                   true
+    validate_certs:          false
+    use_rest:                Always
+  vars_files:
+    - global.vars
+  collections:
+    - netapp.ontap
+
+  tasks:
+  - name: Automaticaly choose the right Vservername
+    set_fact:
+      vservername:           "{% if hostname=='tacluster01' %}svm_ta_cifs{% elif hostname=='tbcluster01'%}svm_tb_cifs{% else %}svm_cifs01{% endif %}"
+
+  - name: Automaticaly choose the right Vserver IP-Address
+    set_fact:
+      vserverip:             "{% if hostname=='tacluster01' %}192.168.2.224{% elif hostname=='tbcluster01'%}192.168.2.225{% else %}192.168.2.223{% endif %}"
+
+  - name: Create a Qtree on vserver "{{ vserver }}" and Volume "{{ gruppenname }}_homes" .
+    na_ontap_qtree:
+      state:                 present
+      name:                  "{{ kundenname }}"
+      flexvol_name:          "{{ gruppenname }}_homes"
+      security_style:        ntfs
+      oplocks:               disabled
+      vserver:               "{{ vservername }}"
+      hostname:              "{{ hostname }}"
+      username:              "{{ PRI_CLU_USER }}"
+      password:              "{{ PRI_CLU_PASS }}"
+
+  - name: Create a Qtree on vserver "{{ vserver }}" and Volume "{{ gruppenname }}"
+    na_ontap_qtree:
+      state:                 present
+      name:                  "{{ kundenname }}"
+      flexvol_name:          "{{ gruppenname }}"
+      security_style:        ntfs
+      oplocks:               enabled
+      vserver:               "{{ vservername }}"
+      hostname:              "{{ hostname }}"
+      username:              "{{ PRI_CLU_USER }}"
+      password:              "{{ PRI_CLU_PASS }}"
+
+  - name: Temporary Mount the CIFS Share "{{ vserverip }}/{{ gruppenname }}$/{{ kundenname }}" to LINUX
+    shell: ansible awx-pauli -m mount -a 'path=/tempmount state=mounted fstype=cifs src="//{{ vserverip }}/{{ gruppenname }}$/{{ kundenname }}/" opts="user=Administrator,password=netapp112021,vers=2.0"'
+
+  - name: CLI execute script on Host localhost
+    shell: ansible awx-pauli -m script -a "/var/lib/awx/projects/talus/tempmount.sh >> /tmp/tempmount.log"
+    remote_user: root
+
+  - name: Create CIFS Share for customer {{ kundenname }}_Appl on Volume {{ gruppenname }}
+    na_ontap_cifs:
+      state:                  present
+      hostname:               "{{ hostname }}"
+      username:               "{{ PRI_CLU_USER }}"
+      password:               "{{ PRI_CLU_PASS }}"
+      share_name:             "{{ kundenname }}_Appl$"
+      path:                   "/{{ gruppenname }}/{{ kundenname }}/Appl"
+      vserver:                "{{ vservername }}"
+      share_properties:       browsable,changenotify,oplocks,show-previous-versions,showsnapshot
+      symlink_properties:     enable
+
+  - name: Create CIFS Share for customer {{ kundenname }}_Daten on Volume {{ gruppenname }}
+    na_ontap_cifs:
+      state:                  present
+      hostname:               "{{ hostname }}"
+      username:               "{{ PRI_CLU_USER }}"
+      password:               "{{ PRI_CLU_PASS }}"
+      share_name:             "{{ kundenname }}_Daten$"
+      path:                   "/{{ gruppenname }}/{{ kundenname }}/Daten"
+      vserver:                "{{ vservername }}"
+      share_properties:       browsable,changenotify,oplocks,show-previous-versions,showsnapshot
+      symlink_properties:     enable
+
+  - name: Create CIFS Share for customer {{ kundenname }}_Fsprofiles Daten on Volume {{ gruppenname }}
+    na_ontap_cifs:
+      state:                  present
+      hostname:               "{{ hostname }}"
+      username:               "{{ PRI_CLU_USER }}"
+      password:               "{{ PRI_CLU_PASS }}"
+      share_name:             "{{ kundenname }}_Fsprofiles$"
+      path:                   "/{{ gruppenname }}/{{ kundenname }}/Fsprofiles"
+      vserver:                "{{ vservername }}"
+      share_properties:       browsable,changenotify,oplocks,show-previous-versions,showsnapshot
+      symlink_properties:     enable
+
+#********************  Shares unter "{{ gruppenname }}_homes" ************************************
+  - name: Create CIFS Share for customer "{{ kundenname }}" on Volume "{{ gruppenname }}_homes"
+    na_ontap_cifs:
+      state:                  present
+      hostname:               "{{ hostname }}"
+      username:               "{{ PRI_CLU_USER }}"
+      password:               "{{ PRI_CLU_PASS }}"
+      share_name:             "{{ kundenname }}_Homes$"
+      path:                   "/{{ gruppenname }}_homes"
+      vserver:                "{{ vservername }}"
+      share_properties:       browsable,changenotify,oplocks,show-previous-versions,showsnapshot
+      symlink_properties:     enable
+
+  - name: Set ABE on new created Share {{ kundenname }}_Appl$
+    na_ontap_command:
+      hostname: "{{ hostname }}"
+      username: "{{ PRI_CLU_USER }}"
+      password: "{{ PRI_CLU_PASS }}"
+      command: "cifs share properties add -share-name {{ kundenname }}_Appl$ -vserver {{ vserver }} -share-properties access-based-enumeration"
+      privilege:   'admin'
+      return_dict: true
+
+  - name: Set ABE on new created Share {{ kundenname }}_Daten$
+    na_ontap_command:
+      hostname: "{{ hostname }}"
+      username: "{{ PRI_CLU_USER }}"
+      password: "{{ PRI_CLU_PASS }}"
+      command: "cifs share properties add -share-name {{ kundenname }}_Daten$ -vserver {{ vserver }} -share-properties access-based-enumeration"
+      privilege: 'admin'
+      return_dict: true
+
+  - name: Set ABE on new created Share {{ kundenname }}_Fsprofiles$
+    na_ontap_command:
+      hostname: "{{ hostname }}"
+      username: "{{ PRI_CLU_USER }}"
+      password: "{{ PRI_CLU_PASS }}"
+      command: "cifs share properties add -share-name {{ kundenname }}_Fsprofiles$ -vserver {{ vserver }} -share-properties access-based-enumeration"
+      privilege: 'admin'
+      return_dict: true
+
+  - name: Set ABE on new created Share {{ kundenname }}_Homes$
+    na_ontap_command:
+      hostname: "{{ hostname }}"
+      username: "{{ PRI_CLU_USER }}"
+      password: "{{ PRI_CLU_PASS }}"
+      command: "cifs share properties add -share-name {{ kundenname }}_Homes$ -vserver {{ vserver }} -share-properties access-based-enumeration"
+      privilege: 'admin'
+      return_dict: true
+

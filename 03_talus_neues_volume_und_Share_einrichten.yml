@@ -1,0 +1,160 @@
+#!/usr/bin/env ansible-playbook
+
+###############################################################################
+# Applikation:          Storage-Admin
+# ScriptName:           03_talus_neues_volume_und_Share_einrichten.yml
+# Version:              1.0
+# Typ:                  ansible YAML playbook
+# Beschreibung:         Playbook um neue Gruppen volumen zu erstellen und qouotas zu setzten.
+#                       
+# Author:               Horst Pauli Professional Services Consultant
+#
+# Target Systems:       LINUX Server/VM used as Ansible Host at Customer Site
+#
+# (C) Copyright         NetApp Switzerland 2020
+###############################################################################
+# Modifications:        22/03/2021      Initial Version         # H. Pauli  ###
+###############################################################################
+
+- hosts: localhost
+  gather_facts: false
+  vars:
+    hostname:          "{{ hostname }}"
+    username:          "{{ PRI_CLU_USER }}"
+    password:          "{{ PRI_CLU_PASS }}"
+    vserver:	       "{{ vservername }}"
+    https:             true
+    validate_certs:    false
+    use_rest:          Always
+  vars_files:
+    - global.vars
+  collections:
+    - netapp.ontap
+
+  tasks:
+  - name: Automaticaly choose the right Aggregate
+    set_fact:
+      aggrname:             "{% if hostname=='tacluster01' %}aggr_tacluster01_01_data1{% elif hostname=='tbcluster01'%}aggr_tbcluster01_01_data1{% else %}aggr_ontapsim_02_data{% endif %}"
+
+  - name: Create a CIFS volume with name "gruppe{{ gruppennummer }}" on vserver "{{ vserver }}"
+    na_ontap_volume:
+      state:                 present
+      hostname:              "{{ hostname }}"
+      username:              "{{ PRI_CLU_USER }}"
+      password:              "{{ PRI_CLU_PASS }}"
+      name:                  "gruppe{{ gruppennummer }}"
+      aggregate_name:        "{{ aggrname }}"
+      size:                  "{{ volsize }}"
+      size_unit:             gb
+      volume_security_style: ntfs
+      space_guarantee:       none
+      snapshot_policy:       cifs_daily30
+      tiering_policy:        auto
+      export_policy:         default
+      percent_snapshot_space: 0
+      encrypt:                false
+      vserver:                "{{ vserver }}"
+      junction_path:          "/gruppe{{ gruppennummer }}"
+      wait_for_completion:    True
+      nvfail_enabled:         False
+      comment:                ansible created volume
+
+  - name: Create a CIFS volume with name "gruppe{{ gruppennummer }}_homes" on vserver "{{ vserver }}"
+    na_ontap_volume:
+      state:                 present
+      hostname:              "{{ hostname }}"
+      username:              "{{ PRI_CLU_USER }}"
+      password:              "{{ PRI_CLU_PASS }}"
+      name:                  "gruppe{{ gruppennummer }}_homes"
+      aggregate_name:        "{{ aggrname }}"
+      size:                  "{{ volsize }}"
+      size_unit:             gb
+      volume_security_style: ntfs
+      space_guarantee:       none
+      snapshot_policy:       cifs_daily30
+      tiering_policy:        auto
+      export_policy:         default
+      percent_snapshot_space: 0
+      encrypt:                true
+      vserver:                "{{ vservername }}"
+      junction_path:          "/gruppe{{ gruppennummer }}_homes"
+      wait_for_completion:    True
+      nvfail_enabled:         False
+      comment:                ansible created volume
+
+  - name: Create a CIFS Share on vserver "{{ vserver }}" and sharename "gruppe{{ gruppennummer }}$"
+    na_ontap_cifs:
+      state:                  present
+      hostname:               "{{ hostname }}"
+      username:               "{{ PRI_CLU_USER }}"
+      password:               "{{ PRI_CLU_PASS }}"
+      share_name:             "gruppe{{ gruppennummer }}$"
+      path:                   "/gruppe{{ gruppennummer }}"
+      vserver:                "{{ vservername }}"
+      share_properties:       browsable,changenotify,oplocks,show-previous-versions,showsnapshot
+      symlink_properties:     enable
+
+  - name: Create a CIFS Share on vserver "{{ vserver }}" and sharename "gruppe{{ gruppennummer }}_homes$" 
+    na_ontap_cifs:
+      state:                  present
+      hostname:               "{{ hostname }}"
+      username:               "{{ PRI_CLU_USER }}"
+      password:               "{{ PRI_CLU_PASS }}"
+      share_name:             "gruppe{{ gruppennummer }}_homes$"
+      path:                   "/gruppe{{ gruppennummer }}_homes"
+      vserver:                "{{ vservername }}"
+      share_properties:       browsable,changenotify,oplocks,show-previous-versions,showsnapshot
+      symlink_properties:     enable
+
+  - name: Create CIFS share acl on vserver "{{ vserver }}" and "gruppe{{ gruppennummer }}$"
+    na_ontap_cifs_acl:
+      state:                  present
+      share_name:             "gruppe{{ gruppennummer }}$"
+      user_or_group:          BUILTIN\Administrators
+      permission:             full_control
+      vserver:                "{{ vservername }}"
+      hostname:               "{{ hostname }}"
+      username:               "{{ netapp_username }}"
+      password:               "{{ netapp_password }}"
+
+  - name: Create CIFS share acl on vserver "{{ vserver }}" and "gruppe{{ gruppennummer }}_homes$"
+    na_ontap_cifs_acl:
+      state:                  present
+      share_name:             "gruppe{{ gruppennummer }}_homes$"
+      user_or_group:          BUILTIN\Administrators
+      permission:             full_control
+      vserver:                "{{ vservername }}"
+      hostname:               "{{ hostname }}"
+      username:               "{{ netapp_username }}"
+      password:               "{{ netapp_password }}"
+
+  - name: Create a quota policy vor "gruppe{{ gruppennummer }}_homes$" of 1GB per user
+    na_ontap_quota_policy:
+      state:                  present
+      vserver:                "{{ vservername }}"
+      name:                   default
+      hostname:               "{{ hostname }}"
+      username:               "{{ PRI_CLU_USER }}"
+      password:               "{{ PRI_CLU_PASS }}"
+
+  - name: Add/Set quota vor "gruppe{{ gruppennummer }}_homes$" to 1GB per user
+    na_ontap_quotas:
+      state:                   present
+      vserver:                 "{{ vservername }}"
+      volume:                  "gruppe{{ gruppennummer }}_homes"
+      type:                    user
+      quota_target:            ""
+      policy:                  default
+      disk_limit:              "1GB"
+      qtree:                   ""
+      set_quota_status:        yes
+      use_rest:                always
+      hostname:                "{{ hostname }}"
+      username:                "{{ PRI_CLU_USER }}"
+      password:                "{{ PRI_CLU_PASS }}"
+
+  - name: Abschluss Meldung ausgeben
+    ansible.builtin.debug:
+      #msg: "default plugin output: result example"
+      msg: "Meldung Abschluss => Erinnerung fuer CommVault und Cleondris"
+

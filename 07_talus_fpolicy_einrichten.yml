@@ -1,0 +1,95 @@
+#!/usr/bin/env ansible-playbook
+
+#******************************************************************************
+# Applikation:          Storage-Admin
+# ScriptName:           07_talus_fpolicy_einrichten.yml
+# Version:              1.0
+# Typ:                  ansible YAML playbook
+# Beschreibung:         YAML Playbook Template to start new OnTap Module
+#******************************************************************************
+# Spezial modules used: ll /root/.ansible/collections/ansible_collections/netapp/ontap/plugins/modules
+#                        na_ontap_fpolicy_event.py
+#                        na_ontap_fpolicy_ext_engine.py
+#                        na_ontap_fpolicy_policy.py
+#                        na_ontap_fpolicy_scope.py
+#                        na_ontap_fpolicy_status.py
+#                 run galaxy install on netapp moduel to get latest version:
+# ansible-doc -M /root/.ansible/collections/ansible_collections/netapp/ontap/plugins/modules na_ontap_fpolicy_scope
+#******************************************************************************
+# Author:               Horst Pauli Proffessional Services Consultant
+#
+# Target Systems:       LINUX Server/VM used as Ansible Host at Customer Site
+#
+# (C) Copyright         NetApp Switzerland 2020
+#******************************************************************************
+# Modifications:        01/03/2021      Initial Version         # H. Pauli  ***
+#                       xx/xx/xxxx      comment                 # Author    ***
+#******************************************************************************
+
+- hosts: localhost
+  gather_facts: false
+  vars:
+      hostname:       "{{ hostname }}"
+      username:       "{{ PRI_CLU_USER }}"
+      password:       "{{ PRI_CLU_PASS }}"
+      vservername:    svm_ta_cifs
+      https:          true
+      validate_certs: false
+  vars_files:
+    - global.vars
+  collections:
+    - netapp.ontap
+
+  tasks:
+    #*****************************************************************************************
+    # Erst werden die Fpolicy event und policy settings pdf_event und pdf_only eingerichtet
+    #*****************************************************************************************
+  - name: Check Fpolicy on all SCAN Volume on {{ PRI1_CLU }} Vserver {{ PRI1_SVM }}
+    na_ontap_fpolicy_event:
+      state:           present
+      vserver:         "{{ PRI1_SVM }}"
+      name:            pdf_event
+      protocol:        cifs
+      file_operations: rename,create
+      hostname:        "{{ PRI1_CLU }}"
+      username:        "{{ PRI1_CLU_USER }}"
+      password:        "{{ PRI1_CLU_PASS }}"
+      https:          true
+      validate_certs: false
+
+  - name: Check Fpolicy on all SCAN Volume on {{ PRI2_CLU }} Vserver {{ PRI2_SVM }}
+    na_ontap_fpolicy_event:
+      state:           present
+      vserver:         "{{ PRI2_SVM }}"
+      name:            pdf_event
+      protocol:        cifs
+      file_operations: rename,create
+      hostname:        "{{ PRI2_CLU }}"
+      username:        "{{ PRI2_CLU_USER }}"
+      password:        "{{ PRI2_CLU_PASS }}"
+      https:          true
+      validate_certs: false
+
+    #*****************************************************************************************
+    # Jetzt werden all Scan Shares im vserver im Fpolicy Scope eingetragen
+    #*****************************************************************************************
+  - name: FPolicy scope auf {{ PRI1_CLU }} im vserver svm_ta_cifs setzten/pruefen
+    na_ontap_fpolicy_scope:
+      state:             present
+      vserver:           "{{ PRI1_SVM }}"
+      name:              pdf_only
+      shares_to_include: "*Scan*$"
+      hostname:          "{{ PRI1_CLU }}"
+      username:          "{{ PRI1_CLU_USER }}"
+      password:          "{{ PRI1_CLU_PASS }}"
+
+  - name: FPolicy scope auf {{ PRI2_CLU }} im vserver svm_tb_cifs setzten/pruefen
+    na_ontap_fpolicy_scope:
+      state:             present
+      vserver:           "{{ PRI2_SVM }}"
+      name:              pdf_only
+      shares_to_include: rio_outsourcing$,ccc_Fsprofiles$
+      hostname:          "{{ PRI2_CLU }}"
+      username:          "{{ PRI2_CLU_USER }}"
+      password:          "{{ PRI2_CLU_PASS }}"
+
