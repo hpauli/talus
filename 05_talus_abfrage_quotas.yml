@@ -13,16 +13,16 @@
 #
 # (C) Copyright         NetApp Switzerland 2020
 #******************************************************************************
-# Modifications:        30/04/2021      Initial Version         # H. Pauli  ***
+# Modifications:        01/03/2021      Initial Version         # H. Pauli  ***
 #                       xx/xx/xxxx      comment                 # Author    ***
 #******************************************************************************
 
 - hosts: localhost
   gather_facts: false
   vars:
-      hostname:         "{{ PRI_CLU }}"
-      username:         "{{ PRI_CLU_USER }}"
-      password:         "{{ PRI_CLU_PASS }}"
+      hostname:         "{{ PRI1_CLU }}"
+      username:         "{{ PRI1_CLU_USER }}"
+      password:         "{{ PRI1_CLU_PASS }}"
       https:            true
       validate_certs:   false
       info_tacluster01: []
@@ -35,27 +35,32 @@
   tasks:
   - name: Gather quota details from {{ PRI1_CLU }}
     na_ontap_command:
-      hostname:         "{{ PRI1_CLU }}"
-      username:         "{{ PRI1_CLU_USER }}"
-      password:         "{{ PRI1_CLU_PASS }}"
-      command:          "quota report -vserver svm_ta_cifs"
-      privilege:        'admin'
-      return_dict:      true
-    register:           info_tacluster01
+      hostname:       tacluster01
+      username:       "{{ PRI_ADM_USER }}"
+      password:       "{{ PRI_ADM_PASS }}"
+      command:        "quota report -vserver svm_ta_cifs -volume * -disk-limit !1GB -disk-limit !- -fields disk-limit -fields quota-specifier"
+      privilege:      'admin'
+      return_dict:    true
+    register:         info_tacluster01
 
-#  - debug: msg="{{ info_tbcluster01.msg.stdout }}"
+#  - debug: msg="{{ info_tacluster01.msg.stdout }}"
+#  - name: Write Command Output to file
+#    copy:
+#      content:      '{{ info_tacluster01.msg.stdout }}'
+#      dest:          "/tmp/quota_report.log"
 
-  - name: Gather quota details from {{ PRI1_CLU }}
+  - name: Gather quota details from {{ PRI2_CLU }}
     na_ontap_command:
-      hostname:         "{{ PRI2_CLU }}"
-      username:         "{{ PRI2_CLU_USER }}"
-      password:         "{{ PRI2_CLU_PASS }}"
-      command:          "quota report -vserver svm_ta_cifs"
-      privilege:        'admin'
-      return_dict:      true
-    register:           info_tbcluster01
+      hostname:       tbcluster01
+      username:       "{{ PRI_ADM_USER }}"
+      password:       "{{ PRI_ADM_PASS }}"
+      command:        "quota report -vserver svm_tb_cifs -volume * -disk-limit !1GB -disk-limit !- -fields disk-limit -fields quota-specifier"
+      privilege:      'admin'
+      return_dict:    true
+    register:         info_tbcluster01
 
 #  - debug: msg="{{ info_tbcluster01.msg.stdout }}"
+
 
 #################################################################################
 
@@ -64,7 +69,10 @@
       host:             10.0.1.90
       port:             25
       to:               netapp@talus.ch
+      #to:               netapp@talus.ch,horst.pauli@netapp.com
+      #to:               horst.pauli@netapp.com
       from:             netapp@talus.ch
       subject:          Ansible AWX Quota report
+#      body:            "{{ info_tacluster01.msg.stdout }}"
       body:             "{{ info_tacluster01.msg.stdout }},{{ info_tbcluster01.msg.stdout }}"
 
