@@ -36,22 +36,21 @@
 #  - name: Gather quota details from {{ PRI1_CLU }}
 #    na_ontap_command:
 #      hostname:       "{{ PRI1_CLU }}"
-#      username:       "{{ PRI1_CLU_USER }}"
-#      password:       "{{ PRI1_CLU_PASS }}"
-#      command:        "quota report -vserver svm_ta_cifs"
+#      username:       "{{ PRI_ADM_USER }}"
+#      password:       "{{ PRI_ADM_PASS }}"
+#      command:        "quota report -vserver svm_ta_cifs -volume * -disk-limit !1GB -disk-limit !- -fields disk-limit -fields quota-specifier"
 #      privilege:      'admin'
 #      return_dict:    true
 #    register:         info_tacluster01
 
-#  - debug:           msg="{{ info_tacluster01.msg.stdout }}"
-
+#  - debug: msg="{{ info_tacluster01.msg.stdout }}"
 #  - name: Write Command Output to file
 #    copy:
-#      content:       '{{ info_tacluster01.stdout }}'
+#      content:      '{{ info_tacluster01.stdout }}'
 #      dest:          "/tmp/quota_report.log"
 
   - name: CLI TEST 1
-    shell: ansible localhost -m na_ontap_command -a 'hostname=tacluster01 username=admin password=netapp11 command="quota report -vserver svm_ta_cifs"'
+    shell: ansible localhost -m na_ontap_command -a 'hostname=tacluster01 username=ansible password=netapp11 command="quota report -vserver svm_ta_cifs"'
     register: cli_tacluster01
 
   - debug: msg="{{ cli_tacluster01.stdout }}"
@@ -65,14 +64,14 @@
 
 #################################################################################
 
-  - name: Send E-Mail to Mailserver 10.0.1.90
-    mail:
-      host:             10.0.1.90
-      port:             25
-      to:               netapp@talus.ch
-      from:             netapp@talus.ch
-      subject:          Ansible AWX Quota report
-      body:             "{{ cli_tacluster01.stdout }}"
-#      body:            "{{ info_tacluster01.msg.stdout }},{{ info_tbcluster01.msg.stdout }},{{ info_tzcluster01.msg.stdout }}"
+#  - name: Send E-Mail to Mailserver 10.0.1.90
+#    mail:
+#      host:            10.0.1.90
+#      port:            25
+#      to:               netapp@talus.ch
+#      from:             netapp@talus.ch
+#      subject:          Ansible AWX Quota report
+#      body:            "{{ cli_tacluster01.stdout }}"
+##      body:           "{{ info_tacluster01.msg.stdout }},{{ info_tbcluster01.msg.stdout }},{{ info_tzcluster01.msg.stdout }}"
 
 
