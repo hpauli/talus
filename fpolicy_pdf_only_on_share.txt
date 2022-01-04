@@ -1,0 +1,93 @@
+**************************************************************************************************************
+*** Mittels Nachfolgenden Kommandos wird eine FPolicy erstellt die auf einem Share nur PDF files zulässt:  ***
+**************************************************************************************************************
+
+****************************************************
+** 1. Fpolicy Event erstellen:
+vserver fpolicy policy event create -vserver  svm_ta_cifs    -event-name e_ransomware      -protocol cifs -file-operations rename,create 
+vserver fpolicy policy event create -vserver  svm_ta_cifs    -event-name ev_cifs_snapguard -protocol cifs -file-operations rename,create 
+
+
+vserver fpolicy policy event create -vserver  svm_tz_backup1 -event-name pdf_event -protocol cifs -file-operations rename,create  
+vserver fpolicy policy event create -vserver  svm_ta_cifs    -event-name pdf_event -protocol cifs -file-operations rename,create 
+vserver fpolicy policy event create -vserver  svm_tb_cifs    -event-name pdf_event -protocol cifs -file-operations rename,create 
+
+****************************************************
+** 2. Fpolicy Policy erstellen
+vserver fpolicy policy create -vserver svm_ta_cifs    -policy-name snapguard -events e_ransomware      -engine native -is-mandatory true -allow-privileged-access no -is-passthrough-read-enabled false
+vserver fpolicy policy create -vserver svm_ta_cifs    -policy-name snapguard -events ev_cifs_snapguard -engine native -is-mandatory true -allow-privileged-access no -is-passthrough-read-enabled false
+
+vserver fpolicy policy create -vserver svm_tz_backup1 -policy-name pdf_only  -events pdf_event -engine native -is-mandatory true -allow-privileged-access no -is-passthrough-read-enabled false
+vserver fpolicy policy create -vserver svm_ta_cifs    -policy-name pdf_only  -events pdf_event -engine native -is-mandatory true -allow-privileged-access no -is-passthrough-read-enabled false
+vserver fpolicy policy create -vserver svm_tb_cifs    -policy-name pdf_only  -events pdf_event -engine native -is-mandatory true -allow-privileged-access no -is-passthrough-read-enabled false
+
+****************************************************
+** 3. Fpolicy Policy Scope definieren:
+vserver fpolicy policy scope create -vserver svm_tz_backup1 -policy-name pdf_only -shares-to-include rio_outsourcing$ -file-extensions-to-include *  -file-extensions-to-exclude pdf
+vserver fpolicy policy scope modify -vserver svm_ta_cifs    -policy-name pdf_only -shares-to-include TAL_Scan$ -file-extensions-to-include *  -file-extensions-to-exclude pdf,tif
+vserver fpolicy policy scope create -vserver svm_tb_cifs    -policy-name pdf_only -shares-to-include rio_outsourcing$ -file-extensions-to-include *  -file-extensions-to-exclude pdf,tif
+
+
+vserver fpolicy policy scope create -vserver svm_ta_cifs    -policy-name pdf_only -shares-to-include TAL_Scan$ -file-extensions-to-include *  -file-extensions-to-exclude pdf,tif
+
+vserver fpolicy policy scope modify -vserver svm_ta_cifs    -policy-name pdf_only -shares-to-include TAL_Scan$ -file-extensions-to-include *  -file-extensions-to-exclude pdf,tif
+
+****************************************************
+** 4. Fpolicy status abfragen:
+
+tzcluster01::> vserver fpolicy show
+                                      Sequence
+Vserver        Policy Name              Number  Status   Engine
+------------- ----------------------- --------  -------- ---------
+svm_ta_cifs   pdf_only                       -  off      native
+svm_tb_cifs   pdf_only                       -  off      native              
+tzcluster01::> 
+
+
+
+****************************************************
+** 5. fpolicy aktivieren:
+vserver fpolicy enable -vserver svm_tz_backup1 -policy-name pdf_only -sequence-number 1
+vserver fpolicy enable -vserver svm_ta_cifs    -policy-name pdf_only -sequence-number 1
+vserver fpolicy enable -vserver svm_tb_cifs    -policy-name pdf_only -sequence-number 1
+
+
+tacluster01::> fpolicy policy scope show -fields shares-to-include,shares-to-exclude
+  (vserver fpolicy policy scope show)
+vserver     policy-name shares-to-include shares-to-exclude
+----------- ----------- ----------------- -----------------
+svm_ta_cifs pdf_only    *Scan*$           -
+svm_ta_cifs snapguard   -                 -
+svm_ta_cifs intrafind   -                 -
+svm_tb_cifs-mc pdf_only *Scan*$           -
+svm_tb_cifs-mc snapguard -                -
+svm_tb_omc_cifs-mc snapguard -            -
+6 entries were displayed.
+
+
+
+****************************************************
+** 6. FPolicy Status abfragen:
+ontapsim::> vserver fpolicy  show
+                                      Sequence
+Vserver       Policy Name               Number  Status   Engine
+------------- ----------------------- --------  -------- ---------
+svm_ta_cifs   pdf_only                       1  on       native
+svm_tb_cifs   pdf_only                       1  on       native
+2 entries were displayed.
+
+ontapsim::>
+ontapsim::> vserver fpolicy policy show
+  Vserver      Policy       Events     Engine        Is Mandatory  Privileged
+               Name                                                Access
+-------------- -----------  ---------- ------------- ------------  -----------
+svm_ta_cifs    pdf_only     pdf_event  native        true          no
+svm_tb_cifs    pdf_only     pdf_event  native        true          no
+2 entries were displayed.
+
+ontapsim::>
+
+fpolicy policy external-engine show
+
+
+
