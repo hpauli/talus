@@ -21,10 +21,10 @@
 # Target Systems:       LINUX Server/VM used as Ansible Host at Customer Site
 #
 # (C) Copyright         NetApp Switzerland 2020
-#******************************************************************************
-# Modifications:        01/03/2021      Initial Version         # H. Pauli  ***
-#                       xx/xx/xxxx      comment                 # Author    ***
-#******************************************************************************
+#**************************************************************************************
+# Modifications:        01/03/2021      Initial Version                 # H. Pauli  ***
+#                       18/11/2021      global alle shares *SCAN*$      # H. Paulii ***
+#**************************************************************************************
 
 - hosts: localhost
   gather_facts: false
@@ -88,8 +88,9 @@
       state:             present
       vserver:           "{{ PRI2_SVM }}"
       name:              pdf_only
-      shares_to_include: rio_outsourcing$,ccc_Fsprofiles$
+      shares_to_include: "*Scan*$"
       hostname:          "{{ PRI2_CLU }}"
       username:          "{{ PRI2_CLU_USER }}"
       password:          "{{ PRI2_CLU_PASS }}"
+
 
