@@ -1,0 +1,90 @@
+#!/usr/bin/env ansible-playbook
+
+#******************************************************************************
+# Applikation:          Storage-Admin
+# ScriptName:           10_talus_volume_report.yml
+# Version:              1.0
+# Typ:                  ansible YAML playbook
+# Beschreibung:         Volume fill Report via Mail versenden
+#
+# Author:               Horst Pauli Proffessional Services Consultant
+#
+# Target Systems:       LINUX Server/VM used as Ansible Host at Customer Site
+#
+# (C) Copyright         NetApp Switzerland 2020
+#******************************************************************************
+# Modifications:        18/11/2021      Initial Version         # H. Pauli  ***
+#                       xx/xx/xxxx      comment                 # Author    ***
+#******************************************************************************
+
+- hosts: localhost
+  gather_facts: false
+  vars:
+      hostname:         "{{ PRI1_CLU }}"
+      username:         "{{ PRI_ADM_USER }}"
+      password:         "{{ PRI_ADM_PASS }}"
+      https:            true
+      validate_certs:   false
+      info_tacluster01: []
+  vars_files:
+    - global.vars
+  collections:
+    - netapp.ontap
+    - community.general
+
+  tasks:
+  - name: Disable intrafind Fpolicy {{ PRI1_CLU }}
+    na_ontap_command:
+      hostname:       tacluster01
+      username:       "{{ PRI_ADM_USER }}"
+      password:       "{{ PRI_ADM_PASS }}"
+      command:        "fpolicy disable -vserver svm_ta_cifs -policy-name intrafind"
+      privilege:      'admin'
+      return_dict:    true
+    register:         intrafind1_tacluster01
+
+  - name: Enable intrafind Fpolicy {{ PRI1_CLU }}
+    na_ontap_command:
+      hostname:       tacluster01
+      username:       "{{ PRI_ADM_USER }}"
+      password:       "{{ PRI_ADM_PASS }}"
+      command:        " fpolicy enable  -vserver svm_ta_cifs -policy-name intrafind -sequence-number 3"
+      privilege:      'admin'
+      return_dict:    true
+    register:         intrafind2_tacluster01
+
+#  - name: Disable intrafind Fpolicy {{ PRI2_CLU }}
+#    na_ontap_command:
+#      hostname:       tbcluster01
+#      username:       "{{ PRI1_CLU_USER }}"
+#      password:       "{{ PRI1_CLU_PASS }}"
+#      command:        "volume show -vserver svm_tb_cifs -percent-used >75 -fields percent-used -fields available"
+#      privilege:      'admin'
+#      return_dict:    true
+#    register:         intrafind1_tbcluster01
+
+#  - name: Enable intrafind Fpolicy {{ PRI2_CLU }}
+#    na_ontap_command:
+#      hostname:       tacluster01
+#      username:       "{{ PRI2_CLU_USER }}"
+#      password:       "{{ PRI2_CLU_PASS }}"
+#      command:        " fpolicy enable  -vserver svm_tb_cifs -policy-name intrafind -sequence-number 3"
+#      privilege:      'admin'
+#      return_dict:    true
+#    register:         intrafind2_tbcluster01
+
+#################################################################################
+
+  - name: Send E-Mail to Mailserver 10.0.1.90
+    mail:
+      host:             10.0.1.90
+      port:             25
+      to:               netapp@talus.ch
+      #to:               netapp@talus.ch,horst.pauli@netapp.com
+      #to:               horst.pauli@netapp.com
+      from:             netapp@talus.ch
+      subject:          Ansible AWX Intrafind FPolicy Disable/Enable
+      #body:            "Policy Disable: {{ intrafind1_tacluster01.msg.status }}"
+      body:             "Policy Disable: {{ intrafind1_tacluster01.msg.status }},Policy Enable: {{ intrafind2_tacluster01.msg.status }}"
+      #body:            "{{ intrafind1_tacluster01.msg.status }},{{ intrafind2_tacluster01.msg.status }},{{ intrafind1_tbcluster01.msg.status }},{{ intrafind2_tbcluster01.msg.status }}"
+
